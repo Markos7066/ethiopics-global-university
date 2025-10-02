@@ -8,6 +8,7 @@ const connectDB = require("./config/database")
 const authRoutes = require("./routes/auth")
 const userRoutes = require("./routes/users")
 const bookingRoutes = require("./routes/bookings"); 
+const complaintRoutes = require("./routes/complaints");
 dotenv.config()
 
 const app = express()
@@ -27,7 +28,7 @@ app.use("/api/auth", authRoutes)
 app.use("/api/users", userRoutes)
 app.use("/api/bookings", require("./routes/bookings"))
 // app.use("/api/payments", require("./routes/payments"))
-// app.use("/api/complaints", require("./routes/complaints"))
+ app.use("/api/complaints", require("./routes/complaints"))
  app.use("/api/notifications", require("./routes/notifications"))
 // app.use("/api/admin", require("./routes/admin"))
 // app.use("/api/reviews", require("./routes/reviews"))
