@@ -3,12 +3,13 @@ const { body, validationResult, query } = require("express-validator")
 const Notification = require("../models/Notification")
 const User = require("../models/User")
 const { auth, authorize } = require("../middleware/auth")
+const { createBulkNotifications, sendNotificationEmail } = require("../utils/notificationService");
 
 const router = express.Router()
 
 // @route   GET /api/notifications
 // @desc    Get user's notifications
-// @access  Private
+// @access  Priva
 router.get(
   "/",
   auth,
@@ -215,28 +216,37 @@ router.post(
       ])
       .withMessage("Invalid notification type"),
     body("priority").optional().isIn(["low", "normal", "high", "urgent"]).withMessage("Invalid priority"),
+    body("channels").optional().custom((value) => {
+      if (value) {
+        const validChannels = ["inApp", "email", "sms", "push"];
+        const keys = Object.keys(value);
+        if (!keys.every((k) => validChannels.includes(k) && typeof value[k] === "boolean")) {
+          throw new Error("Channels must be an object with boolean values for inApp, email, sms, or push");
+        }
+      }
+      return true;
+    }),
   ],
   async (req, res) => {
     try {
-      // Check for validation errors
-      const errors = validationResult(req)
+      const errors = validationResult(req);
       if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() })
+        return res.status(400).json({ errors: errors.array() });
       }
 
-      const { recipients, title, message, type, priority = "normal" } = req.body
+      const { recipients, title, message, type, priority = "normal", channels = { inApp: true } } = req.body;
 
       // Verify all recipients exist
       const users = await User.find({
         _id: { $in: recipients },
-        isActive: true,
-      })
+        isactive: true,
+      });
 
       if (users.length !== recipients.length) {
-        return res.status(400).json({ message: "Some recipients not found or inactive" })
+        return res.status(400).json({ message: "Some recipients not found or inactive" });
       }
 
-      // Create notifications for all recipients
+      // Create notification data with channels
       const notifications = recipients.map((recipientId) => ({
         recipient: recipientId,
         sender: req.user.id,
@@ -244,21 +254,25 @@ router.post(
         message,
         type,
         priority,
-      }))
+        channels, // Include channels from request, defaulting to { inApp: true }
+      }));
 
-      const createdNotifications = await Notification.insertMany(notifications)
+      // Use notification service to create and handle email
+      const createdNotifications = await Notification.insertMany(notifications); // Direct insert for simplicity, but consider service
+      const emailNotifications = createdNotifications.filter((n) => n.channels.email);
+      await Promise.allSettled(emailNotifications.map((n) => sendNotificationEmail(n)));
 
       res.status(201).json({
         message: "Notifications sent successfully",
         count: createdNotifications.length,
         notifications: createdNotifications,
-      })
+      });
     } catch (error) {
-      console.error("Send notification error:", error)
-      res.status(500).json({ message: "Server error during notification sending" })
+      console.error("Send notification error:", error);
+      res.status(500).json({ message: "Server error during notification sending" });
     }
-  },
-)
+  }
+);
 
 // @route   POST /api/notifications/broadcast
 // @desc    Broadcast notification to all users of specific role(s) (Admin only)
@@ -292,28 +306,37 @@ router.post(
       ])
       .withMessage("Invalid notification type"),
     body("priority").optional().isIn(["low", "normal", "high", "urgent"]).withMessage("Invalid priority"),
+    body("channels").optional().custom((value) => {
+      if (value) {
+        const validChannels = ["inApp", "email", "sms", "push"];
+        const keys = Object.keys(value);
+        if (!keys.every((k) => validChannels.includes(k) && typeof value[k] === "boolean")) {
+          throw new Error("Channels must be an object with boolean values for inApp, email, sms, or push");
+        }
+      }
+      return true;
+    }),
   ],
   async (req, res) => {
     try {
-      // Check for validation errors
-      const errors = validationResult(req)
+      const errors = validationResult(req);
       if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() })
+        return res.status(400).json({ errors: errors.array() });
       }
 
-      const { roles, title, message, type, priority = "normal" } = req.body
+      const { roles, title, message, type, priority = "normal", channels = { inApp: true } } = req.body;
 
       // Get all users with specified roles
       const users = await User.find({
         role: { $in: roles },
-        isActive: true,
-      }).select("_id")
+        isactive: true,
+      }).select("_id");
 
       if (users.length === 0) {
-        return res.status(400).json({ message: "No active users found with specified roles" })
+        return res.status(400).json({ message: "No active users found with specified roles" });
       }
 
-      // Create notifications for all users
+      // Create notifications with channels
       const notifications = users.map((user) => ({
         recipient: user._id,
         sender: req.user.id,
@@ -321,22 +344,23 @@ router.post(
         message,
         type,
         priority,
-      }))
+        channels,
+      }));
 
-      const createdNotifications = await Notification.insertMany(notifications)
+      // Use bulk creation from service
+      const createdNotifications = await createBulkNotifications(notifications);
 
       res.status(201).json({
         message: "Broadcast notification sent successfully",
         count: createdNotifications.length,
         roles,
-      })
+      });
     } catch (error) {
-      console.error("Broadcast notification error:", error)
-      res.status(500).json({ message: "Server error during broadcast" })
+      console.error("Broadcast notification error:", error);
+      res.status(500).json({ message: "Server error during broadcast" });
     }
-  },
-)
-
+  }
+);
 // @route   GET /api/notifications/stats
 // @desc    Get notification statistics (Admin only)
 // @access  Private (Admin)

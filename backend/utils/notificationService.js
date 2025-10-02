@@ -22,52 +22,55 @@ const createNotification = async (notificationData) => {
 // Send notification email
 const sendNotificationEmail = async (notification) => {
   try {
-    await notification.populate("recipient", "name email")
+    // Populate recipient with firstname, lastname, and email
+    await notification.populate("recipient", "firstname lastname email");
 
-    const emailSubject = `${notification.title} - Language Teaching Center`
+    // Construct the full name from firstname and lastname
+    const recipientName = `${notification.recipient.firstname || ""} ${notification.recipient.lastname || ""}`.trim();
+
+    const emailSubject = `${notification.title} - Language Teaching Center`;
     const emailBody = `
       <h2>${notification.title}</h2>
-      <p>Dear ${notification.recipient.name},</p>
+      <p>Dear ${recipientName || "User"},</p> <!-- Fallback to "User" if no name -->
       <p>${notification.message}</p>
       ${
         notification.actions && notification.actions.length > 0
           ? `
-        <div style="margin: 20px 0;">
-          ${notification.actions
-            .map(
-              (action) => `
-            <a href="${action.url}" style="
-              display: inline-block;
-              padding: 10px 20px;
-              margin: 5px;
-              background-color: ${action.style === "primary" ? "#007bff" : action.style === "danger" ? "#dc3545" : "#6c757d"};
-              color: white;
-              text-decoration: none;
-              border-radius: 5px;
-            ">${action.label}</a>
-          `,
-            )
-            .join("")}
-        </div>
-      `
+      <div style="margin: 20px 0;">
+        ${notification.actions
+          .map(
+            (action) => `
+          <a href="${action.url}" style="
+            display: inline-block;
+            padding: 10px 20px;
+            margin: 5px;
+            background-color: ${action.style === "primary" ? "#007bff" : action.style === "danger" ? "#dc3545" : "#6c757d"};
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+          ">${action.label}</a>
+        `,
+          )
+          .join("")}
+      </div>
+    `
           : ""
       }
       <p>Best regards,<br>Language Teaching Center Team</p>
-    `
+    `;
 
-    await sendEmail(notification.recipient.email, emailSubject, emailBody)
+    await sendEmail(notification.recipient.email, emailSubject, emailBody);
 
     // Update delivery status
-    notification.deliveryStatus.email = "sent"
-    await notification.save()
+    notification.deliveryStatus.email = "sent";
+    await notification.save();
   } catch (error) {
-    console.error("Error sending notification email:", error)
-    // Update delivery status to failed
-    notification.deliveryStatus.email = "failed"
-    await notification.save()
+    console.error("Error sending notification email:", error);
+    notification.deliveryStatus.email = "failed";
+    await notification.save();
+    throw error;
   }
-}
-
+};
 // Bulk create notifications
 const createBulkNotifications = async (notifications) => {
   try {

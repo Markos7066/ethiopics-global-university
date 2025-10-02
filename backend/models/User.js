@@ -115,8 +115,8 @@ userSchema.methods.toJSON = function () {
   return user;
 };
 
-userSchema.virtual("fullName").get(function () {
-  return `${this.firstname} ${this.lastname}`;
+userSchema.virtual("name").get(function () {
+  return `${this.firstname} ${this.lastname}`.trim();
 });
 
 module.exports = mongoose.model("User", userSchema);
