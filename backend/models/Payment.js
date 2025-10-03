@@ -1,4 +1,4 @@
-const mongoose = require("mongoose")
+const mongoose = require("mongoose");
 
 const paymentSchema = new mongoose.Schema(
   {
@@ -23,11 +23,11 @@ const paymentSchema = new mongoose.Schema(
     },
     currency: {
       type: String,
-      default: "USD",
+      default: "ETB", // Chapa primarily uses ETB
     },
     paymentMethod: {
       type: String,
-      enum: ["credit_card", "debit_card", "paypal", "bank_transfer", "cash"],
+      enum: ["credit_card", "debit_card", "mobile_money", "bank_transfer", "cash"],
       required: true,
     },
     status: {
@@ -42,9 +42,12 @@ const paymentSchema = new mongoose.Schema(
     },
     paymentGateway: {
       type: String,
-      enum: ["stripe", "paypal", "square", "manual"],
+      enum: ["chapa", "stripe", "paypal", "square", "manual"],
+      default: "chapa",
     },
     gatewayTransactionId: String,
+    chapaTransactionId: String, // Specific to Chapa
+    paymentLink: String, // URL for Chapa hosted payment page
     paidAt: Date,
     refundedAt: Date,
     refundAmount: Number,
@@ -64,15 +67,15 @@ const paymentSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  },
-)
+  }
+);
 
 // Generate invoice number before saving
 paymentSchema.pre("save", function (next) {
   if (this.isNew && !this.invoiceNumber) {
-    this.invoiceNumber = `INV-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    this.invoiceNumber = `INV-${Date.now()}-${Math.round(Math.random() * 1000000)}`;
   }
-  next()
-})
+  next();
+});
 
-module.exports = mongoose.model("Payment", paymentSchema)
+module.exports = mongoose.model("Payment", paymentSchema);
